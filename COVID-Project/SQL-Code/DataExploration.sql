@@ -205,3 +205,4 @@ WHERE cd.continent IS NOT NULL
 -- consider what is interesting about the covid pandemic + response in retrospect
 -- specific spikes, important dates to highlight?
 -- important ratios to calculate and track over time?
+-- test
