@@ -1,15 +1,20 @@
+-- Confirming that data import (.xlsx) worked without issue
+-- Note that dates were breaking on import
+-- Required manipulation in excel before reimport
 SELECT *
 FROM CovidProject..CovidDeaths
 WHERE continent IS NOT NULL
 ORDER BY location, date
 ;
+SELECT *
+FROM CovidProject..CovidVaccinations
+ORDER BY location, date
+;
 
---SELECT *
---FROM CovidProject..CovidVaccinations
---ORDER BY location, date
---;
 
--- Select Data that we are going to be using
+-- Looking at how this data is structured
+-- Note NULLs towards the start and end of data reported by each location
+-- Occasionally, data reported from some locations switches between daily and weekly basis
 SELECT location
 	 , date
 	 , total_cases
@@ -18,12 +23,36 @@ SELECT location
 	 , population
 FROM CovidProject..CovidDeaths
 WHERE continent IS NOT NULL
+	AND location = 'South Korea'
+ORDER BY location, date
+;
+
+
+-- Investigating what 'smoothed' data looks like
+-- Initial observation suggests a rolling average calculated using a set range of days
+-- Confirmed to be a 7-day rolling average (https://github.com/owid/covid-19-data/blob/master/public/data/README.md)
+-- Some locations stop reporting on new tests and new vaccinations mid~late 2022
+-- South Korea stops reporting new tests 2022-06-16, new vaccinations 2022-12-13
+-- Similar in data from other locations, various columns, varying dates
+SELECT cd.location 
+	 , cd.date
+	 , cd.new_cases, cd.new_cases_smoothed
+	 , cd.new_deaths, cd.new_deaths_smoothed
+	 , cv.new_tests, cv.new_tests_smoothed
+	 , cv.new_vaccinations, cv.new_vaccinations_smoothed
+FROM CovidProject..CovidDeaths AS cd
+JOIN CovidProject..CovidVaccinations AS cv
+	ON cd.location = cv.location
+	AND cd.date = cv.date
+WHERE cd.continent IS NOT NULL
+	AND cd.location IN ('South Korea', 'Japan')
 ORDER BY location, date
 ;
 
 
 -- Looking at Total Cases vs Total Deaths 
--- Shows the likelihood of dying if infected with COVID, by country
+-- Shows the likelihood of dying if infected with COVID
+-- Datatype recasting due to some numeric data being imported as nvarchar
 SELECT location
 	 , date
 	 , total_cases
@@ -80,7 +109,17 @@ ORDER BY TotalDeathCount DESC
 ;
 
 
--- Looking at global numbers by date
+-- Looking at global Death Percentage over time
+-- CASE statement to avoid divide by zero errors
+WITH glob AS (
+	SELECT date
+		 , SUM(CAST(new_cases AS float)) AS GlobalDailyCases
+		 , SUM(CAST(new_deaths AS float)) AS GlobalDailyDeaths
+	FROM CovidProject..CovidDeaths
+	WHERE continent IS NOT NULL
+	GROUP BY date
+)
+
 SELECT date
 	 , GlobalDailyCases
 	 , GlobalDailyDeaths
@@ -88,33 +127,31 @@ SELECT date
 		WHEN GlobalDailyCases != 0 THEN (GlobalDailyDeaths / GlobalDailyCases) * 100 
 		ELSE 0
 	   END AS DeathPercentage
-FROM (
-	SELECT date
-		 , SUM(CAST(new_cases AS float)) AS GlobalDailyCases
-		 , SUM(CAST(new_deaths AS float)) AS GlobalDailyDeaths
-	FROM CovidProject..CovidDeaths
-	WHERE continent IS NOT NULL
-	GROUP BY date) AS glob
+FROM glob
 ORDER BY date
 ;
 
 
--- Looking at global numbers overall
+-- Looking at global Death Percentage overall
+WITH glob AS (
+	SELECT SUM(CAST(new_cases AS float)) AS GlobalCases
+		 , SUM(CAST(new_deaths AS float)) AS GlobalDeaths
+	FROM CovidProject..CovidDeaths
+	WHERE continent IS NOT NULL
+)
+
 SELECT GlobalCases
 	 , GlobalDeaths
 	 , CASE 
 		WHEN GlobalCases != 0 THEN (GlobalDeaths / GlobalCases) * 100
 		ELSE 0
 	   END AS DeathPercentage
-FROM (
-	SELECT SUM(CAST(new_cases AS float)) AS GlobalCases
-		 , SUM(CAST(new_deaths AS float)) AS GlobalDeaths
-	FROM CovidProject..CovidDeaths
-	WHERE continent IS NOT NULL) AS glob
+FROM glob
 ;
 
 
 -- Looking at Total Population vs Vaccinations
+-- Utilizes a SUM() window function to overcome NULLs in the new_vaccinations data
 SELECT cd.continent
 	 , cd.location
 	 , cd.date
@@ -133,7 +170,7 @@ ORDER BY cd.continent, cd.location, cd.date
 -- Looking at Rolling Vaccinations vs Population
 -- Note that Rolling Vaccination Rate occasionally exceeds 100
 -- This is due to second doses and booster shots being counted as new vaccinations
--- Querying with SUM(people_vaccinated) might be more useful for visualizations later on
+-- Using SUM(people_vaccinated) OVER... might be more appropriate for visualizations
 WITH rollvac (Continent, Location, Date, Population, New_Vaccinations, RollingVaccinations) AS (
 SELECT cd.continent
 	 , cd.location
@@ -154,8 +191,8 @@ ORDER BY Continent, Location, Date
 ;
 
 
--- Repeating the above query with a Temp Table instead of a CTE
-DROP TABLE IF EXISTS #PopulationVaccinations
+-- Reimplementing above query with a Temp Table instead of a CTE
+-- DROP TABLE IF EXISTS #PopulationVaccinations
 CREATE TABLE #PopulationVaccinations (
 Continent nvarchar(255)
 , Location nvarchar(255)
@@ -184,8 +221,8 @@ ORDER BY Continent, Location, Date
 ;
 
 
--- Creating view to store for later visualizations
-DROP VIEW IF EXISTS PctPopulationVaccinated
+-- Creating a View to utilize in visualization software
+-- DROP VIEW IF EXISTS PctPopulationVaccinated
 CREATE VIEW PctPopulationVaccinated AS
 SELECT cd.continent
 	 , cd.location
@@ -198,11 +235,4 @@ JOIN CovidProject..CovidVaccinations AS cv
 	ON cd.location = cv.location
 	AND cd.date = cv.date
 WHERE cd.continent IS NOT NULL
-
-
--- TASK: Create a number of views containing data that might be interesting to use in tableau 
--- consider the ability to drill down - global, continent, country scale
--- consider what is interesting about the covid pandemic + response in retrospect
--- specific spikes, important dates to highlight?
--- important ratios to calculate and track over time?
--- test
+;
