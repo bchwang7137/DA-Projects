@@ -1,4 +1,4 @@
--- SQL queries for (TEMP: covid19 dashboard 2)
+-- SQL queries for COVID-19 Global Vacc Inequality DB
 -- Data source: Our World in Data COVID-19 Dataset
 
 
