@@ -21,4 +21,3 @@ By combining SQL for data manipulation and Tableau for visualization, this proje
 ## COVID-19 Global Vaccine Inequality Dashboard
 - Code: *COVID19GlobalVaccDB.sql*
 - Dashboard Link: [Link](https://public.tableau.com/views/COVID-19GlobalVaccInequalityDB/GlobalCOVID-19VaccIneqDB?:language=en-US&:display_count=n&:origin=viz_share_link)
-
