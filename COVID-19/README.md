@@ -1,4 +1,4 @@
-# COVID-19 Data Projects
+# COVID-19
 
 ## Description
 These data projects primarily utilize SQL and Tableau to analyze and visualize the Our World in Data COVID-19 Dataset. This comprehensive dataset contains information on confirmed cases, deaths, hospitalizations, vaccinations, and various other metrics pertinent to the global COVID-19 pandemic. The overall goal of this project is to create interactive and informative dashboards that depict the evolving severity of the pandemic over time, particularly before and after the development and deployment of different COVID-19 vaccines. Additionally, the project aims to highlight the notable disparities in vaccination program progress across various countries.
