@@ -1,5 +1,5 @@
 # UVA ECON 4160 - Health Economics
-# Term Paper: Poeverty and Low Birthweight
+# Term Paper: Poverty and Low Birthweight
 # Data Prep/Analysis Script
 # BC HWANG (bh2xc)
 
