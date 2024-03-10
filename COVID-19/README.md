@@ -12,12 +12,12 @@ By combining SQL for data manipulation and Tableau for visualization, this proje
 - Data Fetch Date: December 6, 2023
 
 ## COVID-19 Data Exploration
-- Code: *DataExploration.sql*
+- Code: [DataExploration.sql](DataExploration.sql)
 
 ## COVID-19 Global Case Fatality Rate Dashboard
-- Code: *Covid19GlobalCFRDB.sql*
+- Code: [Covid19GlobalCFRDB.sql](Covid19GlobalCFRDB.sql)
 - Dashboard Link: [Link](https://public.tableau.com/views/COVID-19GlobalCFRDB/GlobalCOVID-19CFRDB?:language=en-US&:display_count=n&:origin=viz_share_link)
 
 ## COVID-19 Global Vaccine Inequality Dashboard
-- Code: *COVID19GlobalVaccDB.sql*
+- Code: [COVID19GlobalVaccDB.sql](COVID19GlobalVaccDB.sql)
 - Dashboard Link: [Link](https://public.tableau.com/views/COVID-19GlobalVaccInequalityDB/GlobalCOVID-19VaccIneqDB?:language=en-US&:display_count=n&:origin=viz_share_link)
