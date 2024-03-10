@@ -1,4 +1,4 @@
-# Marketing Data Projects
+# Marketing
 
 
 ## Exploring Facebook Advertising Data
