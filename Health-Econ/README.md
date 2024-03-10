@@ -13,4 +13,4 @@ The analysis involves two logistic regression models which differ in the number 
 
 ## Poverty and Low Birthweight
 - Code: [PovertyLowBirthweight.R](PovertyLowBirthweight.R)
-- Final Term Paper: (TODO)
+- Final Term Paper: [ECON 4160 Final Paper Submission.pdf](ECON-4160-Final-Paper-Submission.pdf)
