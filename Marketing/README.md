@@ -9,6 +9,8 @@
 
 ## Exploring Facebook Advertising Data
 - Code: [CoreCodeSnippets.R](CoreCodeSnippets.R)
-  - Extended code can be found in the [todo] folder. The individual RMarkdown files are knitted together to create the final project deliverable.
+  - This is a script containing a collection of most of the code my team used to explore, prepare, and analyze the project dataset.
+  - The full extent of our code can be found in a series of R Markdown files in the Final Deliverable Components folder.
+  - These individual .rmd files were knitted together to create a .pdf version of our final project deliverable.
 - Final Project Deliverable: [STAT 4220 Final Project Deliverable.pdf](STAT-4220-Final-Project-Deliverable.pdf)
 
