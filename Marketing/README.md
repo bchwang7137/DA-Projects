@@ -9,8 +9,6 @@
 
 ## Exploring Facebook Advertising Data
 - Code: [CoreCodeSnippets.R](CoreCodeSnippets.R)
-- Final Project Deliverable: [STAT-4220-Final-Project-Deliverable.pdf](STAT 4220 Final Project Deliverable.pdf)
-
-
-
+  - Extended code can be found in the [todo] folder. The individual RMarkdown files are knitted together to create the final project deliverable.
+- Final Project Deliverable: [STAT 4220 Final Project Deliverable.pdf](STAT-4220-Final-Project-Deliverable.pdf)
 
