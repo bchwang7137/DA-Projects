@@ -1,0 +1,731 @@
+---
+fontsize: 12pt
+geometry: margin=1in
+linkcolor: black
+urlcolor: black
+output: pdf_document
+header-includes:
+- \usepackage{setspace}
+- \onehalfspacing
+---
+
+```{r setupC, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, highlight=FALSE, message=FALSE)
+```
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, include = FALSE}
+library(knitr)
+library(tidyverse)
+library(tidymodels)
+library(modelr)
+library(randomForest)
+library(Metrics)
+library(GGally)
+library(stats)
+library(car)
+library(yardstick)
+library(viridis)
+library(gridExtra)
+
+recode <- dplyr::recode
+
+mydata <- read_csv("~/RStudio/STAT 4220 - Biz Analytics/Data/conversion.csv")
+mydata$fb_campaign_id <- NULL
+mydata$interest <- NULL
+names(mydata) <- tolower(names(mydata))
+names(mydata)[names(mydata) == "gender"] <- "male"
+names(mydata)[names(mydata) == "xyz_campaign_id"] <- "campaign"
+names(mydata)[names(mydata) == "total_conversion"] <- "total_conv"
+names(mydata)[names(mydata) == "approved_conversion"] <- "app_conv"
+mydata$male[mydata$male == 'M'] <- 1
+mydata$male[mydata$male == 'F'] <- 0
+mydata$male <- as.integer(mydata$male)
+mydata$age[mydata$age == '30-34'] <- 32
+mydata$age[mydata$age == '35-39'] <- 37
+mydata$age[mydata$age == '40-44'] <- 42
+mydata$age[mydata$age == '45-49'] <- 47
+mydata$age <- as.integer(mydata$age)
+mydata$campaign[mydata$campaign == 916] <- "campaign_1"
+mydata$campaign[mydata$campaign == 936] <- "campaign_2"
+mydata$campaign[mydata$campaign == 1178] <- "campaign_3"
+mydata$campaign <- as.factor(mydata$campaign)
+mydata <- mydata %>%
+  mutate(is_c1 = ifelse(campaign=="campaign_1",1,0),
+         is_c2 = ifelse(campaign=="campaign_2",1,0))
+
+# Set seed for data splitting
+set.seed(4220)
+# All-Campaign training/validation/testing sets
+fb.div <- mydata %>%
+  initial_split(prop = 0.6, strata = campaign)
+fb.div1 <- fb.div %>%
+  testing() %>%
+  initial_split(prop = 0.5, strata = campaign)
+fb.train <- training(fb.div)
+fb.val <- training(fb.div1)
+fb.test <- testing(fb.div1)
+
+# Random Forest Analysis - Initial Models
+rf.app <- randomForest(app_conv ~ age + male + impressions + 
+                         clicks + spent + is_c1 + is_c2, 
+                       data = fb.train, mtry = 2, importance = TRUE)
+rf.tot <- randomForest(total_conv ~ age + male + impressions + 
+                         clicks + spent + is_c1 + is_c2,
+                       data = fb.train, mtry = 2, importance = TRUE)
+# Random Forest Analysis - Pruned Models
+rf.app.1 <- randomForest(app_conv ~ age + impressions + clicks + spent, 
+                           data = fb.train, mtry = 2, importance = TRUE)
+rf.tot.1 <- randomForest(total_conv ~ age + impressions + clicks + spent, 
+                           data = fb.train, mtry = 2, importance = TRUE)
+
+# Assessment - Training Data
+mods.tr <- c("Initial - Approved Conversion",
+             "Pruned - Approved Conversion",
+             "Initial - Total Conversion",
+             "Pruned - Total Conversion")
+rmse.tr <- c(sqrt(rf.app$mse[length(rf.app$mse)]),
+             sqrt(rf.app.1$mse[length(rf.app.1$mse)]),
+             sqrt(rf.tot$mse[length(rf.tot$mse)]),
+             sqrt(rf.tot.1$mse[length(rf.tot.1$mse)]))
+sum.tr <- data.frame(mods.tr, rmse.tr)
+
+# Assessment - Validation Data
+pred.init.app <- predict(rf.app, fb.val)
+pred.red.app <- predict(rf.app.1, fb.val)
+pred.init.tot <- predict(rf.tot, fb.val)
+pred.red.tot <- predict(rf.tot.1, fb.val)
+mods.v <- c("Initial - Approved Conversion",
+            "Pruned - Approved Conversion",
+            "Initial - Total Conversion",
+            "Pruned - Total Conversion")
+rmse.v <- c(rmse(fb.val$app_conv, pred.init.app),
+            rmse(fb.val$app_conv, pred.red.app),
+            rmse(fb.val$total_conv, pred.init.tot),
+            rmse(fb.val$total_conv, pred.red.tot))
+sum.v <- data.frame(mods.v, rmse.v)
+
+# Assessment - Testing Data
+pred.test.app <- predict(rf.app, fb.test)
+pred.test.tot <- predict(rf.tot, fb.test)
+rmse(fb.test$app_conv, pred.test.app)
+rmse(fb.test$total_conv, pred.test.tot)
+mods.t <- c("Initial - Approved Conversion",
+            "Initial - Total Conversion")
+rmse.t <- c(rmse(fb.test$app_conv, pred.test.app),
+            rmse(fb.test$total_conv, pred.test.tot))
+sum.t <- data.frame(mods.t, rmse.t)
+
+# Variable Importance
+varnam <- c("Impressions", "Spent", "Clicks", "Age", 
+            "Campaign 2", "Campaign 1", "Male")
+app.imp <- c(21.667, 15.536, 15.235, 13.526, 9.747, -0.153, 4.458)
+tot.imp <- c(23.868, 17.291, 15.348, 18.842, 12.147, 5.464, 2.760)
+sum.imp <- data.frame(varnam, app.imp, tot.imp)
+
+# Final Models
+LinReg.mod1 = lm(total_conv ~ age + impressions + clicks + spent + is_c1 + is_c2, 
+                 data = fb.train)
+LinReg.mod.a3 <- lm(app_conv ~ impressions + spent + is_c1 + is_c2, 
+                    data = fb.train)
+
+## SUMMARY TABLES LINREG
+mods.lr <- c("Initial - Approved Conversion",
+             "Final - Approved Conversion",
+             "Initial - Total Conversion",
+             "Final - Total Conversion")
+mods.lr1 <- c("Initial - Approved Conversion",
+             "Initial - Total Conversion")
+rmse.lr.tr <- c(3.63, 3.87, 2.14, 2.21)
+rmse.lr.v <- c(4.60, 5.39, 2.14, 2.21)
+rmse.lr.te <- c(4.32, 2.86)
+
+sum.lr.tr <- data.frame(mods.lr, rmse.lr.tr)
+sum.lr.v <- data.frame(mods.lr, rmse.lr.v)
+sum.lr.te <- data.frame(mods.lr1, rmse.lr.te)
+```
+
+# Appendix C: Analytics details {-}
+
+## Descriptive analytics {-}
+
+First, we used the ggplot graphical environment to generate four separate box plots, each depicting a quantitative ad performance metric across the three levels of our campaign variable. A square root transformation was applied to normalize the data, which was initially quite skewed as a result of a number of outliers in the Campaign 3 data. This allowed us to create graphics which were slightly more interesting to look at. We then used a helpful function from the gridExtra package to help us arrange the four plots in a single graphic. The underlying data was temporarily manipulated to improve the clarity of our visualizations.
+
+```{r}
+## temporarily recode data for clarity
+mydata$campaign <- as.factor(recode(mydata$campaign, 
+                                    "campaign_1" = 1, 
+                                    "campaign_2" = 2,
+                                    "campaign_3" = 3))
+
+## boxplot of per-ad clicks in each campaign
+# square-root transformation applied within the initial ggplot function call
+p1 <- ggplot(mydata, aes(campaign, sqrt(clicks), fill=campaign)) + 
+  geom_boxplot(outlier.shape=1, alpha=0.5) + 
+  scale_fill_viridis(discrete="true", alpha=0.9) +
+  labs(x="Campaign",
+       y="Clicks",
+       title="Clicks",
+       subtitle="Square Root Transformation Applied") +
+  theme(legend.position="none",
+        plot.title=element_text(size=14),
+        plot.subtitle=element_text(size=8)) +
+  coord_flip()
+
+## boxplot of per-ad impressions in each campaign
+# square-root transformation applied within the initial ggplot function call
+p2 <- ggplot(mydata, aes(campaign, sqrt(impressions), fill=campaign)) + 
+  geom_boxplot(outlier.shape=1, alpha=0.5) + 
+  scale_fill_viridis(discrete="true", alpha=0.9) +
+  labs(x="",
+       y="Impressions",
+       title="Impressions",
+       subtitle="Square Root Transformation Applied") +
+  theme(legend.position="none",
+        plot.title=element_text(size=14),
+        plot.subtitle=element_text(size=8)) +
+  coord_flip()
+
+## boxplot of per-ad spending in each campaign
+# square-root transformation applied within the initial ggplot function call
+p3 <- ggplot(mydata, aes(campaign, sqrt(spent), fill=campaign)) + 
+  geom_boxplot(outlier.shape=1, alpha=0.5) + 
+  scale_fill_viridis(discrete="true", alpha=0.9) +
+  labs(x="Campaign",
+       y="Spending",
+       title="Per-Ad Spending",
+       subtitle="Square Root Transformation Applied") +
+  theme(legend.position="none",
+        plot.title=element_text(size=14),
+        plot.subtitle=element_text(size=8)) +
+  coord_flip()
+
+## boxplot of per-ad approved conversions in each campaign
+# square-root transformation applied within the initial ggplot function call
+p4 <- ggplot(mydata, aes(campaign, sqrt(app_conv), fill=campaign)) + 
+  geom_boxplot(outlier.shape=1, alpha=0.5) + 
+  scale_fill_viridis(discrete="true", alpha=0.9) +
+  labs(x="",
+       y="Approved Conversion",
+       title="Approved Conversion",
+       subtitle="Square Root Transformation Applied") +
+  theme(legend.position="none",
+        plot.title=element_text(size=14),
+        plot.subtitle=element_text(size=8)) +
+  coord_flip()
+
+## revert temporary data changes
+mydata$campaign <- recode(mydata$campaign,
+                          "1" = "campaign_1",
+                          "2" = "campaign_2",
+                          "3" = "campaign_3")
+
+
+## arranging the four plots in a 2x2 grid
+grid.arrange(p1,p2,p3,p4, ncol=2)
+```  
+
+Second, we created a kable in order to depict the number of observations per campaign. This was a relatively simple matter of passing a list containing counts of observations in each campaign into the kable function and specifying new column names. The underlying data was temporarily manipulated to improve the clarity of our visualization.
+
+```{r}
+## temporarily recode data for clarity
+mydata$campaign <- as.factor(recode(mydata$campaign, 
+                                    "campaign_1" = 1, 
+                                    "campaign_2" = 2, 
+                                    "campaign_3" = 3))
+
+## table of counts of observations in each campaign
+mydata %>%
+  count(campaign) %>%
+  kable(col.names = c("Campaign","Count"))
+
+## revert temporary data changes
+mydata$campaign <- recode(mydata$campaign,
+                          "1" = "campaign_1",
+                          "2" = "campaign_2",
+                          "3" = "campaign_3")
+```
+
+Third, we used the base-R graphical environment to generate a correlation plot in order to visualize the relationship between the quantitative variables in our data set. We accomplished this by using the base-R pairs function and passing in a selection of columns containing data on our quantitative variables. We manipulated the labels option in order to display variable names which were more descriptive and easier to interpret.
+
+```{r}
+## generate scatter plots of all quantitative variables
+pairs(mydata[5:9], 
+      labels = c("Impressions","Clicks","Spending",
+                 "Total Conversion","Approved Conversion"),
+      lower.panel = NULL)
+```
+
+Fourth, we created a correlation matrix to better understand the relationship between the quantitative variables using the base-R function cor and saved this as a data frame. We also rounded the values within the matrix to the thousandths place using the round function. We adjusted the row and column names of the data frame containing the correlation matrix in order to display variable names which were more descriptive and easier to interpret. Finally, we created a kable in order to present these correlation values.
+
+```{r}
+## table of correlation coefficients of all quantitative variables
+correlation = as.data.frame(row = c("Impressions","Clicks","Spending",
+                                    "Total Conversion","Approved Conversion"),
+                            round(cor(mydata[5:9]), 3))
+names(correlation) <- c("Impressions","Clicks","Spending",
+                        "Total Conversion","Approved Conversion")
+kable(correlation)
+```
+
+Lastly, we used the ggplot graphical environment to generate two bar plots in order to visualize the distribution of observations by age and gender. We affixed labels for observation counts to each bar in order to make the figure easier to interpret. The underlying data was temporarily manipulated to improve the clarity of our visualizations.
+
+```{r}
+## temporarily recode data for clarity
+mydata$male <- recode(mydata$male, 
+                      "0"="Female", 
+                      "1"="Male")
+mydata$age <- recode(mydata$age,
+                     "32" = "30-34",
+                     "37" = "35-39",
+                     "42" = "40-44",
+                     "47" = "45-49")
+
+## bar plots of audience distribution by age and gender
+ggplot(mydata, aes(x=age, fill=as.factor(age))) + 
+  geom_bar(show.legend = FALSE) +
+  geom_text(stat='count', aes(label=..count..), vjust=-0.5) +
+  facet_wrap(~male) +
+  scale_fill_viridis(discrete="true", alpha=0.9) +
+  labs(x = "Age Brackets",
+       y = "Count",
+       title = "Distribution of Audiences by Age and Gender") +
+  lims(y=c(0,250))
+
+## revert temporary data changes
+mydata$male <- recode(mydata$male, 
+                      "Female" = 0, 
+                      "Male" = 1)
+mydata$age <- recode(mydata$age,
+                     "30-34" = 32,
+                     "35-39" = 37,
+                     "40-44" = 42,
+                     "45-49" = 47)
+```
+
+## Predictive analytics {-}
+
+We began by setting a seed for reproducibility and then split our primary dataset into training, validation, and testing subsets for the sake of our predictive analytics process.
+
+```{r}
+## Set seed for data splitting
+set.seed(4220)
+
+## All-Campaign training/validation/testing sets
+fb.div <- mydata %>%
+  initial_split(prop = 0.6, strata = campaign)
+fb.div1 <- fb.div %>%
+  testing() %>%
+  initial_split(prop = 0.5, strata = campaign)
+fb.train <- training(fb.div)
+fb.val <- training(fb.div1)
+fb.test <- testing(fb.div1)
+
+```
+
+Then, we trained a number of random forest models using the training subset and assessed them based on their RMSE values by using the testing and validation sets. The pruned models were built with the goal of finding a simpler model with similar or comparable model utility that was easier to interpret. We arrived at our reduced models by sequentially removing variables with very low variable importance.
+
+```{r}
+## Random Forest Analysis - Initial Models
+rf.app <- randomForest(app_conv ~ age + male + impressions + 
+                         clicks + spent + is_c1 + is_c2, 
+                       data = fb.train, mtry = 2, importance = TRUE)
+rf.tot <- randomForest(total_conv ~ age + male + impressions + 
+                         clicks + spent + is_c1 + is_c2,
+                       data = fb.train, mtry = 2, importance = TRUE)
+
+## Random Forest Analysis - Reduced Models
+rf.app.1 <- randomForest(app_conv ~ age + impressions + clicks + spent, 
+                           data = fb.train, mtry = 2, importance = TRUE)
+rf.tot.1 <- randomForest(total_conv ~ age + impressions + clicks + spent, 
+                           data = fb.train, mtry = 2, importance = TRUE)
+```
+
+First, the pair of campaign dummy variables were removed due to is_c1 having very low or negative variable importance in both of our full models. The gender variable was the next to be removed, as we found that it had a very low variable importance in the reduced model. The four remaining variables all had high variable importance measures and were therefore retained in our final reduced models. Summaries of the model assessment results are organized and presented in a table.
+
+```{r}
+## Random Forest Model Assessment - Training Data
+# Create a vector of model names
+mods.tr <- c("Initial - Approved Conversion",
+             "Reduced - Approved Conversion",
+             "Initial - Total Conversion",
+             "Reduced - Total Conversion")
+# Create a vector of RMSE values for each model
+rmse.tr <- c(sqrt(rf.app$mse[length(rf.app$mse)]),
+             sqrt(rf.app.1$mse[length(rf.app.1$mse)]),
+             sqrt(rf.tot$mse[length(rf.tot$mse)]),
+             sqrt(rf.tot.1$mse[length(rf.tot.1$mse)]))
+# Add vectors to a data frame, output a summary table
+sum.tr <- data.frame(mods.tr, rmse.tr)
+sum.tr %>%
+  kable(col.names = c("Model Name", "RMSE"))
+```
+
+```{r}
+## Random Forest Model Assessment - Validation Data
+# Generate predictions using validation set
+pred.init.app <- predict(rf.app, fb.val)
+pred.red.app <- predict(rf.app.1, fb.val)
+pred.init.tot <- predict(rf.tot, fb.val)
+pred.red.tot <- predict(rf.tot.1, fb.val)
+# Create a vector of model names
+mods.v <- c("Initial - Approved Conversion",
+            "Reduced - Approved Conversion",
+            "Initial - Total Conversion",
+            "Reduced - Total Conversion")
+# Create a vector of RMSE values for each model
+rmse.v <- c(rmse(fb.val$app_conv, pred.init.app),
+            rmse(fb.val$app_conv, pred.red.app),
+            rmse(fb.val$total_conv, pred.init.tot),
+            rmse(fb.val$total_conv, pred.red.tot))
+# Add vectors to a data frame, output a summary table
+sum.v <- data.frame(mods.v, rmse.v)
+sum.v %>%
+  kable(col.names = c("Model Name", "RMSE"))
+```
+
+```{r}
+## Random Forest Model Assessment - Testing Data
+# Generate predictions using testing set
+pred.test.app <- predict(rf.app, fb.test)
+pred.test.tot <- predict(rf.tot, fb.test)
+# Create a vector of model names
+mods.t <- c("Initial - Approved Conversion",
+            "Initial - Total Conversion")
+# Create a vector of RMSE values for each model
+rmse.t <- c(rmse(fb.test$app_conv, pred.test.app),
+            rmse(fb.test$total_conv, pred.test.tot))
+# Add vectors to a data frame, output a summary table
+sum.t <- data.frame(mods.t, rmse.t)
+sum.t %>%
+  kable(col.names = c("Model Name", "RMSE"))
+```
+
+```{r}
+## Random Forest Variable Importance
+# Create a vector of variable names
+varnam <- c("Impressions", "Spent", "Clicks", "Age", 
+            "Campaign 2", "Campaign 1", "Male")
+# Create a vector of variable importance measures for each model
+# Based on %IncMSE - higher values indicate higher importance
+# values obtained by passing each model through an importance() function call
+app.imp <- c(21.667, 15.536, 15.235, 13.526, 9.747, -0.153, 4.458)
+tot.imp <- c(23.868, 17.291, 15.348, 18.842, 12.147, 5.464, 2.760)
+# Add vectors to a data frame, output a summary table
+sum.imp <- data.frame(varnam, app.imp, tot.imp)
+sum.imp %>%
+  kable(col.names = c("Variables", 
+                      "Importance - Approved Conversion", 
+                      "Importance - Total Conversion"))
+```
+
+While our goal does not necessarily lie in predicting some value, these assessment measures still give us valuable information regarding the soundness of these predictive models. Since we are interested in making inferences about the relationship between our two response variables and the selected predictors, it is important that we use the best possible models as a basis for drawing these conclusions.
+\newline
+
+Finally, we ran a number of linear regression models based on the training subset and assessed them based on their r-squared values. We include some elements of our exploratory process, as well as our process for checking the regression assumptions. Summaries of the model assessment results at each stage are organized and presented in tables.
+
+```{r}
+## Linear Regression Model - Correlation
+#Total Conversion
+fb.train %>%
+  select(impressions, clicks, spent, total_conv) %>%
+  ggpairs(title = "Scatterplot of Quantitative Variables - Total Conversion",
+      columnLabels = c("Impressions", "Clicks", "Spent", "Total Conversion"))
+#Approved Conversion
+fb.train %>%
+  select(impressions, clicks, spent, app_conv) %>%
+  ggpairs(title = "Scatterplot of Quantitative Variables - Approved Conversion",
+      columnLabels = c("Impressions", "Clicks", "Spent", "Approved Conversion"))
+```
+
+Having explored the strength of correlation between the quantitative variables and either of our response variables, we move on to building our total conversion models.
+
+```{r}
+## Linear Regression - Total Conversion Model building
+# Fit total conversion linear regression model using all primary predictors
+# Use training data
+LinReg.mod <- lm(total_conv ~ age + male + impressions + clicks + spent + 
+                   is_c1 + is_c2,
+                 data = fb.train)
+
+# Fit reduced model by removing male 
+LinReg.mod1 = lm(total_conv ~ age + impressions + clicks + spent + 
+                   is_c1 + is_c2, 
+                 data = fb.train)
+# anova(LinReg.mod1, LinReg.mod) 
+# reduced model is better
+
+# Fit reduced model by removing campaign dummy variables
+LinReg.mod2 = lm(total_conv ~ age + impressions + clicks + spent, 
+                 data = fb.train)
+# anova(LinReg.mod2, LinReg.mod1) 
+# full model is better 
+
+# Check multicollinearity for the best reduced model so far
+# vif(LinReg.mod1) 
+# highest multicollinearity with spent, then clicks and impressions 
+# remove spent
+
+# Fit reduced model by removing spent
+LinReg.mod3 = lm(total_conv ~ age + impressions + clicks + is_c1 + is_c2, 
+                 data = fb.train)
+# vif(LinReg.mod3) #no multicollinearity
+# anova(LinReg.mod3, LinReg.mod1) 
+# full model is still better
+```
+
+At this point, we proceed with total conversion models mod1 and mod3 and perform intermediate assessments using the training data. The full model mod1 is chosen because it has a higher R-Squared, despite having some degree of multicollinearity. The reduced model mod3 was chosen because it is simpler and has a far lower degree of multicollinearity.
+
+```{r}
+## Linear Regression -  Total Conversion Model Assessment - Training Data
+# Add predicted values and residuals to training data
+LinReg.add1 <- fb.train %>%
+  add_predictions(LinReg.mod1) %>%
+  add_residuals(LinReg.mod1) %>%
+  rename(pred_total = pred,
+         residuals = resid) %>%
+  mutate(method = "LinReg Initial Total Conversion")
+LinReg.add2 <- fb.train %>%
+  add_predictions(LinReg.mod3) %>%
+  add_residuals(LinReg.mod3) %>%
+  rename(pred_total = pred,
+         residuals = resid) %>%
+  mutate(method = "LinReg Final Total Conversion")
+
+# Combine prediction information
+LinReg.add <- LinReg.add1 %>%
+  bind_rows(LinReg.add2) %>%
+  group_by(method)
+
+rmse <- yardstick::rmse
+
+# Residual standard error
+# Use training data
+LinReg.add %>%
+  rmse(truth = total_conv, estimate = pred_total)
+```
+
+We conclude our initial assessments of our total conversion models here. We note that the full total conversion model appears to perform better, at least based on the training data. We will reassess these models later with the validation set before making a final decision. Next, we move on to building our approved conversion models.
+
+```{r}
+## Linear Regression - Approved Conversion Model building
+# Fit approved conversion linear regression model using all primary predictors
+# Use training data
+LinReg.mod.a <- lm(app_conv ~ age + male + impressions + 
+                     clicks + spent + is_c1 + is_c2,
+                   data = fb.train)
+summary(LinReg.mod.a)
+
+# Fit reduced model by removing clicks
+LinReg.mod.a1 <- lm(app_conv ~ age + male + impressions + 
+                      spent + is_c1 + is_c2, 
+                    data = fb.train)
+# anova(LinReg.mod.a, LinReg.mod.a1) 
+# reduced model is better
+
+# Fit reduced model by removing male
+LinReg.mod.a2 <- lm(app_conv ~ age + impressions + 
+                      spent + is_c1 + is_c2, 
+                    data = fb.train)
+# anova(LinReg.mod.a2, LinReg.mod.a1) 
+# reduced model is better
+
+# Fit reduced model by removing age
+LinReg.mod.a3 <- lm(app_conv ~ impressions + 
+                      spent + is_c1 + is_c2, 
+                    data = fb.train)
+# anova(LinReg.mod.a3, LinReg.mod.a2) 
+# reduced model is better
+# no more insignificant variables to remove
+
+# Check multicollinearity for the best reduced model so far
+# vif(LinReg.mod.a3)  
+# high multicollinearity between impressions and spent
+
+# Fit reduced model by removing impressions
+LinReg.mod.a4 <- lm(app_conv ~ spent + is_c1 + is_c2, 
+                    data = fb.train)
+# summary(LinReg.mod.a4)
+# removing impressions drastically lowers Adj. R-Squared
+# vif(LinReg.mod.a4)
+# very low vif values across the board
+```
+
+At this point, we proceed with the approved conversion models mod.a3 and mod.a4 and perform intermediate assessments using the training data. The reduced model mod.a3 is chosen because it is simpler than the full model with comparable R-Squared while also having manageable multicollinearity. The other reduced model mod.a4 is chosen because it has very a very low degree of multicollinearity, but also a much lower R-Squared. We want to compare these and see which one performs better.
+
+```{r}
+## Linear Regression -  Approved Conversion Model Assessment - Training Data
+# Add predicted values and residuals to Training data
+LinReg.add.a1 <- fb.train %>%
+  add_predictions(LinReg.mod.a3) %>%
+  add_residuals(LinReg.mod.a3) %>%
+  rename(pred_total = pred,
+         residuals = resid) %>%
+  mutate(method = "LinReg Initial Approved Conversion")
+LinReg.add.a2 <- fb.train %>%
+  add_predictions(LinReg.mod.a4) %>%
+  add_residuals(LinReg.mod.a4) %>%
+  rename(pred_total = pred,
+         residuals = resid) %>%
+  mutate(method = "LinReg Final Approved Conversion")
+
+# Combine prediction information
+LinReg.add.a <- LinReg.add.a1 %>%
+  bind_rows(LinReg.add.a2) %>%
+  group_by(method)
+
+# Residual standard error
+# Use training data
+LinReg.add.a %>%
+  rmse(truth = total_conv, estimate = pred_total)
+# initial performs better based on training data - in terms of RMSE
+```
+
+We conclude our initial assessments of our approved conversion models here. We note that the slightly more complex model mod.a3 appears to perform better, at least based on the training data. We reassess these models, as well as our total conversion models in the next section with the validation data.
+
+```{r}
+## Linear Regression Model Assessment - Validation Data
+# Total Conversion
+LinReg.add3 <- fb.val %>%
+  add_predictions(LinReg.mod1) %>%
+  add_residuals(LinReg.mod1) %>%
+  rename(pred_total = pred,
+         residuals = resid) %>%
+  mutate(method = "LinReg Initial Total Conversion")
+
+LinReg.add4 <- fb.val %>%
+  add_predictions(LinReg.mod3) %>%
+  add_residuals(LinReg.mod3) %>%
+  rename(pred_total = pred,
+         residuals = resid) %>%
+  mutate(method = "LinReg Final Total Conversion")
+
+# Combine prediction information
+LinReg.add.v <- LinReg.add3 %>%
+  bind_rows(LinReg.add4) %>%
+  group_by(method)
+
+# Residual standard error
+LinReg.add.v %>%
+  rmse(truth = total_conv, estimate = pred_total)
+
+# Approved Conversion
+LinReg.add.a3 <- fb.val %>%
+  add_predictions(LinReg.mod.a3) %>%
+  add_residuals(LinReg.mod.a3) %>%
+  rename(pred_total = pred,
+         residuals = resid) %>%
+  mutate(method = "LinReg Initial Approved Conversion")
+
+LinReg.add.a4 <- fb.val %>%
+  add_predictions(LinReg.mod.a4) %>%
+  add_residuals(LinReg.mod.a4) %>%
+  rename(pred_total = pred,
+         residuals = resid) %>%
+  mutate(method = "LinReg Final Approved Conversion")
+
+# Combine prediction information
+LinReg.add.a.v <- LinReg.add.a3 %>%
+  bind_rows(LinReg.add.a4) %>%
+  group_by(method)
+
+# Residual standard errors
+LinReg.add.a.v %>%
+  rmse(truth = total_conv, estimate = pred_total)
+```
+
+We conclude our validation set assessments here and decide on our final total and approved conversion models. We decided that the total conversion model mod1 with the age, impressions, clicks, spent, and campaign variables performed better than its counterpart. We also decided that the approved conversion model mod.a3 with the impressions, spent, and campaign variables performed best in its group. We perform our final assessments for these models in the next section with the testing data.
+
+```{r}
+## Linear Regression Model Assessment - Testing Data
+# Total Conversion
+LinReg.add5 <- fb.test %>%
+  add_predictions(LinReg.mod1) %>%
+  add_residuals(LinReg.mod1) %>%
+  rename(pred_total = pred,
+         residuals = resid) %>%
+  mutate(method = "LinReg Initial Total Conversion")
+
+# Residual standard error
+LinReg.add5 %>%
+  rmse(truth = total_conv, estimate = pred_total)
+
+# Approved Conversion
+LinReg.add.a5 <- fb.test %>%
+  add_predictions(LinReg.mod.a3) %>%
+  add_residuals(LinReg.mod.a3) %>%
+  rename(pred_total = pred,
+         residuals = resid) %>%
+  mutate(method = "LinReg Final Approved Conversion")
+
+# Residual standard errors
+LinReg.add.a5 %>%
+  rmse(truth = total_conv, estimate = pred_total)
+
+```
+
+The code in the following section corresponds to the linear regression model summary tables used in the body of the report.
+
+```{r}
+## Linear Regression Model - Summary Tables
+mods.lr <- c("Initial - Approved Conversion",
+             "Final - Approved Conversion",
+             "Initial - Total Conversion",
+             "Final - Total Conversion")
+mods.lr1 <- c("Initial - Approved Conversion",
+             "Final - Approved Conversion",
+             "Initial - Total Conversion",
+             "Final - Total Conversion")
+rmse.lr.tr <- c(3.63, 3.87, 2.14, 2.21)
+rmse.lr.v <- c(4.60, 5.39, 2.14, 2.21)
+rmse.lr.te <- c(4.32, 2.86)
+
+sum.lr.tr <- data.frame(mods.lr, rmse.lr.tr)
+sum.lr.v <- data.frame(mods.lr, rmse.lr.v)
+sum.lr.te <- data.frame(mods.lr1, rmse.lr.te)
+
+sum.lr.tr %>%
+  kable(col.names = c("Model Name", "RMSE"))
+sum.lr.v %>%
+  kable(col.names = c("Model Name", "RMSE"))
+sum.lr.te %>%
+  kable(col.names = c("Model Name", "RMSE"))
+
+Final_Total = coef(summary(LinReg.mod1))
+
+row.names(Final_Total) <- c("(Intercept)", "Age", "Impressions", "Clicks", 
+                            "Spent", "Campaign 1", "Campaign 2")
+
+Final_TotalR = data.frame("R2" = 0.7556, 
+                          "Adj. R2" = 0.7535, 
+                          "P-Value" = "< 2.2e-16")
+
+Final_Approved = coef(summary(LinReg.mod.a3))
+
+row.names(Final_Approved) <- c("(Intercept)", "Impressions", "Spent", 
+                               "Campaign 1", "Campaign 2")
+
+Final_ApprovedR = data.frame("R2" = 0.6098, 
+                             "Adj. R2" = 0.6075, 
+                             "P-Value" = "< 2.2e-16")
+```
+
+Additionally, we checked the linear regression assumptions for our final predictive models. While the residual plots below seem to indicate some initial fanning, the patterns appear to revert as the predicted values become larger. This seems to suggest that we might not have a very serious violation of constant variance in our residuals. As such, we decided that the linear regression methodology was appropriate to continue with this analysis.
+
+```{r}
+## Linear Regression Model - Assumptions
+# Total Conversion
+LinReg.add5 %>%
+  ggplot(aes(x = pred_total, y = residuals)) + 
+  geom_point() +
+  geom_hline(yintercept = 0, color = "red")  +
+  xlab('Predicted Total Conversion') + ylab('Residuals') + 
+  ggtitle('Residuals vs Predicted Values of Total Conversion')
+
+# Approved Conversion
+LinReg.add.a5 %>%
+  ggplot(aes(x = pred_total, y = residuals)) + 
+  geom_point() +
+  geom_hline(yintercept = 0, color = "red") +
+  xlab('Predicted Approved Conversion') + ylab('Residuals') + 
+  ggtitle('Residuals vs Predicted Values of Approved Conversion')
+```

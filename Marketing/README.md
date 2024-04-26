@@ -8,8 +8,8 @@
 - Data Fetch Date: Mar 13, 2021
 
 ## Exploring Facebook Advertising Data
-- Code: (TODO)
-- Final Project Deliverable: [filename.pdf](filename.pdf)
+- Code: [CoreCodeSnippets.R](CoreCodeSnippets.R)
+- Final Project Deliverable: [STAT-4220-Final-Project-Deliverable.pdf](STAT 4220 Final Project Deliverable.pdf)
 
 
 

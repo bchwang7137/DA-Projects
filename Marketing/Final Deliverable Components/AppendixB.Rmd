@@ -1,0 +1,139 @@
+---
+fontsize: 12pt
+geometry: margin=1in
+linkcolor: black
+urlcolor: black
+output: pdf_document
+header-includes:
+- \usepackage{setspace}
+- \onehalfspacing
+---
+
+```{r setupB, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, highlight=FALSE, message=FALSE)
+```
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, include = FALSE}
+library(knitr)
+library(tidyverse)
+
+mydata <- read_csv("~/RStudio/STAT 4220 - Biz Analytics/Data/conversion.csv")
+mydata$fb_campaign_id <- NULL
+mydata$interest <- NULL
+names(mydata) <- tolower(names(mydata))
+names(mydata)[names(mydata) == "gender"] <- "male"
+names(mydata)[names(mydata) == "xyz_campaign_id"] <- "campaign"
+names(mydata)[names(mydata) == "total_conversion"] <- "total_conv"
+names(mydata)[names(mydata) == "approved_conversion"] <- "app_conv"
+mydata$male[mydata$male == 'M'] <- 1
+mydata$male[mydata$male == 'F'] <- 0
+mydata$male <- as.integer(mydata$male)
+mydata$age[mydata$age == '30-34'] <- 32
+mydata$age[mydata$age == '35-39'] <- 37
+mydata$age[mydata$age == '40-44'] <- 42
+mydata$age[mydata$age == '45-49'] <- 47
+mydata$age <- as.integer(mydata$age)
+mydata$campaign[mydata$campaign == 916] <- "campaign_1"
+mydata$campaign[mydata$campaign == 936] <- "campaign_2"
+mydata$campaign[mydata$campaign == 1178] <- "campaign_3"
+mydata$campaign <- as.factor(mydata$campaign)
+mydata <- mydata %>%
+  mutate(is_c1 = ifelse(campaign=="campaign_1",1,0),
+         is_c2 = ifelse(campaign=="campaign_2",1,0))
+```
+
+# Appendix B: Data preparation details {-}
+
+## R {-}
+
+We found that the first column named ad_id already provided a unique per-advertisement identification number, so we dropped the facebook campaign ID variable to avoid redundancy in the data. We also found that the interest column is not useful for analysis as it is impossible to interpret in context of the data, so we removed this variable as well. We also checked to see whether there were any missing values in the entire dataset and found none across all the variables.
+
+```{r}
+## drop facebook campaign ID and interest variables
+mydata$fb_campaign_id <- NULL
+mydata$interest <- NULL
+
+## check for NA values in data frame
+apply(mydata, 2, function(x) any(is.na(x))) #FALSE for all variables
+```  
+
+We then set the names of our variables to lowercase letters and renamed certain columns for ease of understanding. 
+
+```{r}
+## rename columns and set to lowercase
+names(mydata) <- tolower(names(mydata))
+names(mydata)[names(mydata) == "gender"] <- "male"
+names(mydata)[names(mydata) == "xyz_campaign_id"] <- "campaign"
+names(mydata)[names(mydata) == "total_conversion"] <- "total_conv"
+names(mydata)[names(mydata) == "approved_conversion"] <- "app_conv"
+```  
+
+Next, we re-coded certain variables. We changed the gender variable from a character of M and F to boolean values of 1 and 0, respectively, where 1 represents TRUE for whether an individual identifies as male and 0 represents FALSE for whether an individual identifies as male. We also re-coded the age variable from a string to an integer value as it would be easier for analysis to represent the data as a single value rather than a range of ages. We lastly changed the campaign id variable into a factor that is more easily interpreted as campaign 1, 2, and 3 rather than as an unique campaign identifier that does not necessarily have any meaning in the context of our analysis.
+
+```{r}
+## recode gender variable
+mydata$male[mydata$male == 'M'] <- 1
+mydata$male[mydata$male == 'F'] <- 0
+mydata$male <- as.integer(mydata$male)
+
+## recode age variable 
+mydata$age[mydata$age == '30-34'] <- 32
+mydata$age[mydata$age == '35-39'] <- 37
+mydata$age[mydata$age == '40-44'] <- 42
+mydata$age[mydata$age == '45-49'] <- 47
+mydata$age <- as.integer(mydata$age)
+
+## recode campaign id variable 
+mydata$campaign[mydata$campaign == 916] <- "campaign_1"
+mydata$campaign[mydata$campaign == 936] <- "campaign_2"
+mydata$campaign[mydata$campaign == 1178] <- "campaign_3"
+mydata$campaign <- as.factor(mydata$campaign)
+```  
+
+We also created two dummy variables associated with the 3 minus 1 levels of our campaign variable. This preliminary step was necessary because we intended to include campaign as a categorical variable within our linear regression models.
+
+```{r}
+## create 2 dummy variables for the 3 levels of the campaign id variable
+mydata <- mydata %>%
+  mutate(is_c1 = ifelse(campaign=="campaign_1",1,0),
+         is_c2 = ifelse(campaign=="campaign_2",1,0))
+```  
+
+## Excel {-} 
+Given that the first column of data already provided a unique per-advertisement identification number, we decided to stow away the column of Facebook advertisement identification numbers away in order to avoid unnecessary redundancy. We also removed the column of interest codes because the values were impossible to interpret in the context of our data set. Finally, we confirmed that there were no missing or blank values in our data and proceeded to carry out four primary data preparation tasks.
+\newline
+
+First, we decided to assign each of the three marketing campaigns with labels that were more descriptive than their abstract identification numbers. We accomplished this through the use of a nested if() call which we applied to the column values using the fill function.
+\newline
+
+```{r, out.width = "4in", echo=FALSE, fig.align="center"}
+include_graphics("campaign.png")
+```
+
+Second, we looked at the age column and noted that it would be more convenient to have a single integer than a string representing an age range, especially for modelling and other analytical purposes. We accomplished this through the use of a series of nested substitute() and index() calls. We used absolute row number references in order to avoid having the indices shift vertically as we substituted column values with the fill function.
+\newline
+
+```{r, out.width = "4in", echo=FALSE, fig.align="center"}
+include_graphics("age.png")
+```
+
+Third, we rounded the long decimal data in the spent column to two decimal places in order to have them reflect typical dollar values. We accomplished this by highlighting the column and adjusting the formatting of the cells appropriately. We chose not to include any currency symbols in order to avoid complications in later analytical and modeling processes.
+\newline
+
+```{r, out.width = "4in", echo=FALSE, fig.align="center"}
+include_graphics("spent.png")
+```
+
+Fourth, we converted the character data in the gender column into a boolean with the value “1” for male and “0” for female. We accomplished this through the use of an if() call which we applied to the column values using the fill function.
+\newline
+
+```{r, out.width = "3in", echo=FALSE, fig.align="center"}
+include_graphics("gender.png")
+```
+
+Finally, we changed the column names to better reflect their content as well as for the sake of simplicity. For instance, we renamed the gender column as “male” in order to reflect the fact that our boolean associates the value “1” with the male gender. Furthermore, the names were changed to lowercase and also abbreviated where appropriate. A small screenshot of the resulting spreadsheet is provided below.
+\newline
+
+```{r, out.width = "5in", echo=FALSE, fig.align="center"}
+include_graphics("spreadsheet.png")
+```
